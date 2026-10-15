@@ -1,98 +1,157 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تجميع الطرق - مراكش</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>صفحة الليفور - Livery Way</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-body{
-  margin:0;
-  font-family:sans-serif;
-  background:#f0f2f5;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  min-height:100vh;
-}
-.header{
-  background:#00b894;
-  color:white;
-  padding:15px;
-  text-align:center;
-  width:100%;
-  box-sizing:border-box;
-}
-.container{
-  width:95%;
-  max-width:800px;
-  margin:15px auto;
-  background:white;
-  border-radius:15px;
-  padding:15px;
-  box-shadow:0 4px 15px rgba(0,0,0,0.1);
-  box-sizing:border-box;
-}
-.stats{
-  display:flex;
-  justify-content:space-around;
-  background:#f8f9fa;
-  padding:12px;
-  border-radius:10px;
-  margin-bottom:15px;
-}
-.stat{text-align:center}
-.stat b{font-size:18px;color:#00b894;display:block}
-.stat span{font-size:12px;color:#666}
-/* هنا الخريطة فالوسط */
-#map{
-  height:400px;
-  width:100%;
-  border-radius:12px;
-  border:2px solid #e0e0e0;
-}
-.buttons{
-  display:flex;
-  gap:10px;
-  margin-top:15px;
-}
-button{
-  flex:1;
-  padding:12px;
-  border:none;
-  border-radius:10px;
-  font-size:14px;
-  font-weight:bold;
-  cursor:pointer;
-}
-.btn-green{background:#00b894;color:white}
-.btn-blue{background:#0984e3;color:white}
+*{font-family:system-ui} body{margin:0;background:#f1f2f6}
+.header{background:#ff4757;color:white;padding:15px;text-align:center;position:sticky;top:0;z-index:1000}
+.notif{position:fixed;top:70px;left:10px;right:10px;background:white;border-radius:15px;padding:15px;box-shadow:0 5px 25px rgba(0,0,0,0.3);z-index:2000;border-right:6px solid #00b894;display:none;animation:slide 0.5s}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+.btn{border:none;padding:12px;border-radius:10px;font-weight:bold;width:100%;margin-top:8px;cursor:pointer}
+#map{height:55vh;border-radius:15px;margin:10px}
 </style>
 </head>
 <body>
 
 <div class="header">
-<h2 style="margin:0">🚚 نظام تجميع الطرق - مراكش</h2>
-<p style="margin:5px 0 0;font-size:13px">وفر 58% من المازوط والوقت</p>
+<h3 style="margin:0">🛵 صفحة الليفور</h3>
+<p id="livreur-name" style="margin:5px 0 0;font-size:13px">مرحبا أحمد - جليز</p>
 </div>
 
-<div class="container">
-  <div class="stats">
-    <div class="stat"><b id="before">12 km</b><span>قبل</span></div>
-    <div class="stat"><b id="after">5.1 km</b><span>بعد التجميع</span></div>
-    <div class="stat"><b id="saved" style="color:#e17055">6.9 km</b><span>وفرتي</span></div>
-  </div>
-
-  <!-- الخريطة هنا فالوسط -->
-  <div id="map"></div>
-
-  <div class="buttons">
-    <button class="btn-green" onclick="جمع_الطلبيات()">🔄 جمع الطلبيات</button>
-    <button class="btn-blue" onclick="ارسل_لليفور()">📲 واتساب للليفور</button>
-  </div>
+<div id="notif" class="notif">
+<div style="display:flex;justify-content:space-between">
+<b>🔔 كوموند جديد فطريقك!</b>
+<span onclick="this.parentElement.parentElement.style.display='none'" style="cursor:pointer">✖️</span>
+</div>
+<p id="notif-text" style="margin:10px 0"></p>
+<div style="display:flex;gap:8px">
+<button onclick="قبل_الكوموند()" style="flex:1;background:#00b894;color:white" class="btn">✅ قبلت - نديه معايا</button>
+<button onclick="ناقش_الثمن()" style="flex:1;background:#fdcb6e;color:black" class="btn">💬 ثمن قابل للنقاش</button>
+</div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js"></script>
+<div style="padding:10px">
+<div style="background:white;padding:12px;border-radius:12px;display:flex;justify-content:space-between">
+<div>📦 طلبياتي اليوم: <b id="count">1</b></div>
+<div>💰 الربح: <b id="gain">25 DH</b></div>
+</div>
+
+<div id="map"></div>
+
+<div style="background:white;padding:12px;border-radius:12px;margin-top:10px">
+<h4 style="margin:0 0 8px">📋 طلبياتي الحالية:</h4>
+<div id="my-orders"></div>
+<button onclick="فعل_GPS()" id="btn-gps" class="btn" style="background:#0984e3;color:white">🟢 فعل تتبعي Live</button>
+<button onclick="مسح_الطلبيات()" class="btn" style="background:#636e72;color:white;margin-top:5px">مسح الكل</button>
+</div>
+</div>
+
+<audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+<script>
+const map = L.map('map').setView([31.634, -8.015], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let myOrders = JSON.parse(localStorage.getItem('myOrders')||'[{"id":1,"منطقة":"جليز - رياض السلام","ثمن":"25 DH","مسافة":"1.2 km"}]');
+let pendingNotif = null;
+let livreurPos = {lat:31.632,lng:-8.008};
+let gpsMarker=null;
+
+function عرض_طلبياتي(){
+  document.getElementById('my-orders').innerHTML = myOrders.map(o=>`
+    <div style="background:#dfe6e9;padding:8px;border-radius:8px;margin:5px 0;display:flex;justify-content:space-between">
+      <span>📍 ${o.منطقة}</span><span>💰 ${o.ثمن}</span>
+    </div>
+  `).join('');
+  document.getElementById('count').innerText = myOrders.length;
+  let total = myOrders.length*25;
+  document.getElementById('gain').innerText = total+' DH';
+}
+
+function مسافة(lat1,lng1,lat2,lng2){
+  const R=6371; const dLat=(lat2-lat1)*Math.PI/180; const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// كيقلب كل 5 ثواني واش كاين كوموند جديد قريب من طريق الليفور
+setInterval(()=>{
+  let ordersPool = JSON.parse(localStorage.getItem('ordersPool')||'[]');
+  if(ordersPool.length==0) return;
+  
+  // شوف واش كاين كوموند قريب من الليفور (أقل من 2km)
+  for(let order of ordersPool){
+    let d = مسافة(livreurPos.lat, livreurPos.lng, order.lat, order.lng);
+    if(d < 2.5 && !myOrders.find(o=>o.id==order.id)){
+      // لقى كوموند فطريقو!
+      ورّي_اشعار(order, d);
+      break;
+    }
+  }
+}, 5000);
+
+function ورّي_اشعار(order, dist){
+  pendingNotif = order;
+  document.getElementById('notif-text').innerHTML = `
+  📍 <b>${order.منطقة}</b> قريبة ليك<br>
+  📏 بعيدة عليك غير <b>${dist.toFixed(1)} km</b> - فطريقك!<br>
+  💰 الثمن: <b>${order.ثمن}</b> <small style="color:#00b894">(قابل للنقاش)</small><br>
+  ⏱️ زيد غير <b>${Math.round(dist*4)} دقايق</b> وتديها معاك
+  `;
+  document.getElementById('notif').style.display='block';
+  document.getElementById('notif-sound').play().catch(()=>{});
+  
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
+}
+
+function قبل_الكوموند(){
+  if(!pendingNotif) return;
+  myOrders.push(pendingNotif);
+  localStorage.setItem('myOrders', JSON.stringify(myOrders));
+  
+  // حيّدها من pool
+  let pool = JSON.parse(localStorage.getItem('ordersPool')||'[]');
+  pool = pool.filter(o=>o.id!=pendingNotif.id);
+  localStorage.setItem('ordersPool', JSON.stringify(pool));
+  
+  document.getElementById('notif').style.display='none';
+  عرض_طلبياتي();
+  alert(`✅ قبلتي كوموند ${pendingNotif.منطقة} - غادي تديها معاك فطريقك!`);
+  pendingNotif=null;
+}
+
+function ناقش_الثمن(){
+  if(!pendingNotif) return;
+  let ثمن_جديد = prompt(`الثمن الحالي ${pendingNotif.ثمن} - شحال بغيتي؟`, "30 DH");
+  if(ثمن_جديد){
+    pendingNotif.ثمن = ثمن_جديد + " (تم التفاوض)";
+    قبل_الكوموند();
+  }
+}
+
+function فعل_GPS(){
+  if(!navigator.geolocation){alert("GPS ما خدامش"); return;}
+  navigator.geolocation.watchPosition(pos=>{
+    livreurPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    if(gpsMarker) map.removeLayer(gpsMarker);
+    gpsMarker = L.marker([livreurPos.lat, livreurPos.lng], {
+      icon:L.divIcon({html:'<div style="background:#ff4757;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 0 10px red"></div>',iconSize:[20,20]})
+    }).addTo(map).bindPopup("أنت هنا Live").openPopup();
+    map.setView([livreurPos.lat, livreurPos.lng], 14);
+    document.getElementById('btn-gps').innerText="🔴 خدام Live";
+  }, null, {enableHighAccuracy:true});
+}
+
+function مسح_الطلبيات(){
+  if(confirm("تمسح كلشي؟")){myOrders=[]; localStorage.setItem('myOrders','[]'); عرض_طلبياتي();}
+}
+
+ عرض_طلبياتي();
+</script>
 </body>
 </html>
