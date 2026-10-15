@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>صفحة الليفور - إشعارات Live</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{font-family:system-ui} body{margin:0;background:#0f0f0f;color:white}
+.header{background:linear-gradient(90deg,#ff4757,#ff3838);padding:15px;position:sticky;top:0;z-index:1000}
+.notif{position:fixed;top:70px;left:10px;right:10px;background:white;color:black;border-radius:20px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,0.5);z-index:3000;border-right:8px solid #00b894;display:none}
+.btn{border:none;padding:14px;border-radius:12px;font-weight:bold;width:100%;margin-top:8px;font-size:15px}
+.pulse{animation:pulse 1s infinite} @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+#map{height:50vh;border-radius:15px;margin:10px}
+.enable-notif{background:#ffeaa7;color:black;padding:15px;border-radius:12px;margin:10px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="header">
+<h3 style="margin:0">🛵 الليفور - إشعارات Glovo</h3>
+<p style="margin:5px 0 0;font-size:12px">الإشعارات خدامة حتى إلا التيليفون مسدود 🔔</p>
+</div>
+
+<div id="enable-box" class="enable-notif">
+<b>🔔 فعل الإشعارات باش يوصلك الكوموند حتى والتيليفون مسدود</b><br>
+<button onclick="فعل_الإشعارات()" class="btn" style="background:#ff4757;color:white;margin-top:10px">🔔 فعل الإشعارات الآن</button>
+<p style="font-size:11px;margin-top:8px">ضروري تكليكي "السماح" منين يطلع لك السؤال</p>
+</div>
+
+<div id="notif" class="notif pulse">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<b>🔔 كوموند جديد فطريقك! - قابل للنقاش 💬</b>
+<span onclick="this.parentElement.parentElement.style.display='none'" style="font-size:20px;cursor:pointer">✖️</span>
+</div>
+<p id="notif-text" style="margin:12px 0;font-size:15px"></p>
+<div style="background:#f1f2f6;padding:10px;border-radius:10px;margin:10px 0">
+💰 الثمن المقترح: <b id="notif-price" style="color:#00b894"></b><br>
+<small>تقدر تناقش الثمن!</small>
+</div>
+<div style="display:flex;gap:8px">
+<button onclick="قبل_الكوموند()" class="btn" style="flex:1;background:#00b894;color:white">✅ قبلت - 25 DH</button>
+<button onclick="ناقش_الثمن()" class="btn" style="flex:1;background:#fdcb6e;color:black">💬 ناقش - 35 DH</button>
+</div>
+</div>
+
+<div style="padding:10px">
+<div style="background:#2f3542;padding:12px;border-radius:12px;display:flex;justify-content:space-between">
+<div>📦 طلبياتي: <b id="count">1</b></div>
+<div>💰 ربحي: <b id="gain">25 DH</b></div>
+<div>🔔 الحالة: <b id="status" style="color:#00b894">متصل</b></div>
+</div>
+<div id="map"></div>
+<div style="background:#2f3542;padding:12px;border-radius:12px;margin-top:10px">
+<h4 style="margin:0 0 8px">📋 طلبياتي فالطريق:</h4>
+<div id="my-orders"></div>
+<div style="display:flex;gap:8px;margin-top:10px">
+<button onclick="فعل_GPS()" id="btn-gps" class="btn" style="background:#0984e3;color:white;flex:1">📍 فعل GPS Live</button>
+<button onclick="تجربة_اشعار()" class="btn" style="background:#a29bfe;color:black;flex:1">🧪 جرب إشعار</button>
+</div>
+</div>
+</div>
+
+<audio id="sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto" loop></audio>
+
+<script>
+const map = L.map('map').setView([31.634, -8.015], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let myOrders = JSON.parse(localStorage.getItem('myOrders')||'[]');
+let pendingNotif=null;
+let livreurPos={lat:31.632,lng:-8.008};
+let gpsMarker=null;
+let notifPermission=false;
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/Livery-way/sw.js').then(()=>{console.log('SW registered')});
+}
+
+async function فعل_الإشعارات(){
+  let perm = await Notification.requestPermission();
+  if(perm==='granted'){
+    notifPermission=true;
+    document.getElementById('enable-box').style.display='none';
+    document.getElementById('status').innerText='🔔 الإشعارات مفعلة';
+    new Notification('✅ تم تفعيل الإشعارات', {body:'دابا غادي يوصلك أي كوموند قريب حتى والتيليفون مسدود', vibrate:[200,100,200]});
+  } else {
+    alert('خاصك تسمح بالإشعارات باش الخدمة تخدم');
+  }
+}
+
+function عرض_طلبياتي(){
+  document.getElementById('my-orders').innerHTML = myOrders.length? myOrders.map(o=>`<div style="background:#57606f;padding:8px;border-radius:8px;margin:5px 0;display:flex;justify-content:space-between"><span>📍 ${o.منطقة}</span><span>💰 ${o.ثمن}</span></div>`).join('') : '<p style="opacity:0.6">ما كاين والو - تسنى كوموند جديد</p>';
+  document.getElementById('count').innerText=myOrders.length;
+  document.getElementById('gain').innerText=(myOrders.length*28)+' DH';
+}
+
+function مسافة(lat1,lng1,lat2,lng2){
+  const R=6371; const dLat=(lat2-lat1)*Math.PI/180; const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function ورّي_اشعار(order, dist){
+  pendingNotif=order;
+  document.getElementById('notif-text').innerHTML=`📍 <b>${order.منطقة}</b> على بعد <b>${dist.toFixed(1)}km</b> من طريقك!<br>⏱️ زيد غير ${Math.round(dist*4)} دقايق`;
+  document.getElementById('notif-price').innerText=order.ثمن;
+  document.getElementById('notif').style.display='block';
+  
+  // صوت + اهتزاز
+  document.getElementById('sound').play().catch(()=>{});
+  setTimeout(()=>{document.getElementById('sound').pause()},3000);
+  if(navigator.vibrate) navigator.vibrate([300,100,300,100,500]);
+  
+  // إشعار النظام حتى والتيليفون مسدود
+  if(notifPermission && Notification.permission==='granted'){
+    new Notification(`🔔 كوموند جديد: ${order.منطقة}`, {
+      body:`قريب ليك ${dist.toFixed(1)}km - الثمن ${order.ثمن} (قابل للنقاش) - كليكي باش تقبل`,
+      icon:'https://cdn-icons-png.flaticon.com/512/2972/2972185.png',
+      vibrate:[200,100,200],
+      requireInteraction:true
+    });
+  }
+}
+
+function قبل_الكوموند(){
+  if(!pendingNotif) return;
+  myOrders.push(pendingNotif);
+  localStorage.setItem('myOrders', JSON.stringify(myOrders));
+  let pool=JSON.parse(localStorage.getItem('ordersPool')||'[]');
+  pool=pool.filter(o=>o.id!=pendingNotif.id);
+  localStorage.setItem('ordersPool', JSON.stringify(pool));
+  document.getElementById('notif').style.display='none';
+  عرض_طلبياتي();
+  document.getElementById('sound').pause();
+}
+
+function ناقش_الثمن(){
+  if(!pendingNotif) return;
+  let جديد=prompt(`الثمن الحالي ${pendingNotif.ثمن} - شحال بغيتي؟ (قابل للنقاش)`, "35");
+  if(جديد){pendingNotif.ثمن=جديد+' DH (تفاوض)'; قبل_الكوموند();}
+}
+
+function فعل_GPS(){
+  navigator.geolocation.watchPosition(pos=>{
+    livreurPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    if(gpsMarker) map.removeLayer(gpsMarker);
+    gpsMarker=L.marker([livreurPos.lat,livreurPos.lng],{icon:L.divIcon({html:'<div style="background:#ff4757;width:22px;height:22px;border-radius:50%;border:3px solid white;box-shadow:0 0 15px red"></div>',iconSize:[22,22]})}).addTo(map).bindPopup("أنت هنا Live").openPopup();
+    map.setView([livreurPos.lat,livreurPos.lng],14);
+    document.getElementById('btn-gps').innerText="🔴 Live خدام";
+  }, null, {enableHighAccuracy:true});
+}
+
+function تجربة_اشعار(){
+  let fake={id:Date.now(), منطقة:"رياض السلام - قريب منك", ثمن:"25 DH", lat:livreurPos.lat+0.01, lng:livreurPos.lng+0.01};
+  ورّي_اشعار(fake, 0.8);
+}
+
+// قلب كل 4 ثواني على كوموند جديد
+setInterval(()=>{
+  let pool=JSON.parse(localStorage.getItem('ordersPool')||'[]');
+  if(pool.length==0) return;
+  for(let order of pool){
+    let d=مسافة(livreurPos.lat,livreurPos.lng,order.lat,order.lng);
+    if(d<3 && !myOrders.find(o=>o.id==order.id)){ورّي_اشعار(order,d); break;}
+  }
+},4000);
+
+if(Notification.permission==='granted'){notifPermission=true; document.getElementById('enable-box').style.display='none';}
+عرض_طلبياتي();
+</script>
+</body>
+</html>
